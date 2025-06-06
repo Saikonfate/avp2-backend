@@ -19,3 +19,17 @@ CREATE TABLE IF NOT EXISTS juros (
 );
 
 INSERT INTO juros (taxa_selic, data_inicio, data_final) VALUES (0.00, '2010-01-01', '2010-01-01');
+
+CREATE TABLE IF NOT EXISTS compras (
+    id CHAR(36) PRIMARY KEY,
+    id_produto CHAR(36) NOT NULL,
+    valor_entrada DECIMAL(10, 2) NOT NULL,
+    qtd_parcelas INT NOT NULL,
+    valor_parcela DECIMAL(10, 2) NOT NULL,
+    taxa_juros DECIMAL(10, 2) NOT NULL,
+    data_compra TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_produto
+        FOREIGN KEY (id_produto) 
+        REFERENCES produtos(id)
+        ON DELETE RESTRICT
+);
