@@ -133,4 +133,78 @@ $app->post('/compras', function (Request $request, Response $response) {
 
     return $response->withStatus(201);
 });
+
+$app->put('/juros', function (Request $request, Response $response) {
+    $data = $request->getParsedBody();
+
+    if (!isset($data['dataInicio']) || !isset($data['dataFinal'])) {
+        return $response->withStatus(400); // Bad Request
+    }
+
+    try {
+        $dataInicio = new DateTime($data['dataInicio']);
+        $dataFinal = new DateTime($data['dataFinal']);
+        $dataMinima = new DateTime('2010-01-01');
+        $dataAtual = new DateTime();
+    } catch (Exception $e) {
+        return $response->withStatus(400); // Bad Request - Formato de data inválido
+    }
+
+    if (
+        $dataInicio > $dataFinal ||
+        $dataInicio < $dataMinima ||
+        $dataFinal > $dataAtual
+    ) {
+        return $response->withStatus(400); // Bad Request - Violação das regras de data
+    }
+
+    $dataInicioFormatada = $dataInicio->format('d/m/Y');
+    $dataFinalFormatada = $dataFinal->format('d/m/Y');
+    
+    $url = "https://api.bcb.gov.br/dados/serie/bcdata.sgs.11/dados?formato=json&dataInicial={$dataInicioFormatada}&dataFinal={$dataFinalFormatada}";
+
+    set_error_handler(function($errno, $errstr) {
+        throw new Exception($errstr, $errno);
+    }, E_WARNING);
+
+    try {
+        $apiResponse = file_get_contents($url);
+    } catch (Exception $e) {
+        return $response->withStatus(400); // Bad Request
+    } finally {
+        restore_error_handler();
+    }
+
+    if ($apiResponse === false) {
+        return $response->withStatus(400); // Bad Request
+    }
+
+    $selicDiaria = json_decode($apiResponse, true);
+
+    $taxaSelicAcumulada = 0.0;
+    if (is_array($selicDiaria)) {
+        foreach ($selicDiaria as $registro) {
+            $taxaSelicAcumulada += (float)$registro['valor'];
+        }
+    }
+    
+    $taxaSelicAcumulada = round($taxaSelicAcumulada, 2);
+
+    $pdo = Database::getInstance();
+    $sql = "UPDATE juros SET taxa_selic = :taxa, data_inicio = :data_inicio, data_final = :data_final ORDER BY id LIMIT 1";
+    
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([
+        ':taxa' => $taxaSelicAcumulada,
+        ':data_inicio' => $data['dataInicio'],
+        ':data_final' => $data['dataFinal']
+    ]);
+
+    $payload = json_encode(['novaTaxaJuros' => $taxaSelicAcumulada]);
+    $response->getBody()->write($payload);
+
+    return $response
+            ->withHeader('Content-Type', 'application/json')
+            ->withStatus(200); // OK
+});
 $app->run();
