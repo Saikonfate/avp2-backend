@@ -207,4 +207,42 @@ $app->put('/juros', function (Request $request, Response $response) {
             ->withHeader('Content-Type', 'application/json')
             ->withStatus(200); // OK
 });
+
+$app->get('/compras', function (Request $request, Response $response) {
+    $sql = "SELECT 
+                c.id AS idCompra,
+                p.nome AS nomeProduto,
+                p.tipo AS tipoProduto,
+                p.valor AS valorProduto,
+                c.valor_entrada AS valorEntrada,
+                c.qtd_parcelas AS qtdParcelas,
+                c.valor_parcela AS valorParcela,
+                c.taxa_juros AS taxaJuros
+            FROM 
+                compras c
+            JOIN 
+                produtos p ON c.id_produto = p.id
+            ORDER BY 
+                c.data_compra DESC";
+
+    try {
+        $pdo = Database::getInstance();
+        $stmt = $pdo->query($sql);
+        $compras = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        if (empty($compras)) {
+            return $response->withStatus(404); // Not Found
+        }
+
+        $payload = json_encode($compras);
+        $response->getBody()->write($payload);
+
+        return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200); // OK
+
+    } catch (PDOException $e) {
+        return $response->withStatus(500); // Internal Server Error
+    }
+});
 $app->run();
