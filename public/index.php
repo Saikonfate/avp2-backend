@@ -245,4 +245,51 @@ $app->get('/compras', function (Request $request, Response $response) {
         return $response->withStatus(500); // Internal Server Error
     }
 });
+
+$app->get('/estatistica', function (Request $request, Response $response) {
+    $sql = "SELECT
+                COUNT(c.id) AS `count`,
+                SUM(c.valor_entrada + (c.qtd_parcelas * c.valor_parcela)) AS `sum`,
+                SUM((c.valor_entrada + (c.qtd_parcelas * c.valor_parcela)) - p.valor) AS `sumTx`
+            FROM
+                compras c
+            JOIN
+                produtos p ON c.id_produto = p.id";
+
+    try {
+        $pdo = Database::getInstance();
+        $stmt = $pdo->query($sql);
+        $result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        $stats = [
+            'count' => 0,
+            'sum' => 0.0,
+            'avg' => 0.0,
+            'sumTx' => 0.0,
+            'avgTx' => 0.0
+        ];
+        
+        if ($result && (int)$result['count'] > 0) {
+            $count = (int)$result['count'];
+            $sum = (float)($result['sum'] ?? 0.0);
+            $sumTx = (float)($result['sumTx'] ?? 0.0);
+
+            $stats['count'] = $count;
+            $stats['sum'] = round($sum, 2);
+            $stats['avg'] = round($sum / $count, 2);
+            $stats['sumTx'] = round($sumTx, 2);
+            $stats['avgTx'] = round($sumTx / $count, 2);
+        }
+
+        $payload = json_encode($stats);
+        $response->getBody()->write($payload);
+
+        return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withStatus(200); // OK
+
+    } catch (PDOException $e) {
+        return $response->withStatus(500); // Internal Server Error
+    }
+});
 $app->run();
